@@ -30,6 +30,7 @@ import { formatCurrency } from '@/lib/utils';
 import { Textarea } from '../ui/textarea';
 import { AddPayeeDialog } from '../payees/add-payee-dialog';
 import { AddCategoryDialog } from '../categories/add-category-dialog';
+import { SignatureDialog } from './signature-dialog';
 
 const formSchema = z.object({
   payeeId: z.string().min(1, { message: 'لطفا طرف حساب را انتخاب کنید.' }),
@@ -62,6 +63,8 @@ interface CheckFormProps {
 export function CheckForm({ onSubmit, initialData, bankAccounts, payees, categories, onCancel }: CheckFormProps) {
   const [isAddPayeeOpen, setIsAddPayeeOpen] = useState(false);
   const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
+  const [isSignatureDialogOpen, setIsSignatureDialogOpen] = useState(false);
+  const [formData, setFormData] = useState<CheckFormValues | null>(null);
 
   const form = useForm<CheckFormValues>({
     resolver: zodResolver(formSchema),
@@ -121,6 +124,25 @@ export function CheckForm({ onSubmit, initialData, bankAccounts, payees, categor
     }
   };
 
+  const handleFormSubmit = (data: CheckFormValues) => {
+    // Don't ask for signature when editing
+    if (initialData) {
+        onSubmit(data);
+        return;
+    }
+    // For new checks, open the signature dialog
+    setFormData(data);
+    setIsSignatureDialogOpen(true);
+  };
+
+  const handleSignatureConfirm = (signature: string) => {
+    if (formData) {
+        const finalData = { ...formData, signature };
+        onSubmit(finalData);
+    }
+    setIsSignatureDialogOpen(false);
+    setFormData(null);
+  };
 
   const getOwnerName = (account: BankAccount) => {
     if (account.ownerId === 'shared_account') return "(مشترک)";
@@ -129,6 +151,9 @@ export function CheckForm({ onSubmit, initialData, bankAccounts, payees, categor
   };
 
   const checkingAccounts = [...bankAccounts.filter(acc => acc.accountType === 'checking')].sort((a, b) => b.balance - a.balance);
+  const selectedBankAccountId = form.watch('bankAccountId');
+  const selectedBankAccount = bankAccounts.find(acc => acc.id === selectedBankAccountId);
+  const ownerName = selectedBankAccount?.ownerId ? USER_DETAILS[selectedBankAccount.ownerId as keyof typeof USER_DETAILS]?.firstName : null;
 
   return (
       <>
@@ -139,7 +164,7 @@ export function CheckForm({ onSubmit, initialData, bankAccounts, payees, categor
             </CardTitle>
             </CardHeader>
             <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)}>
+            <form onSubmit={form.handleSubmit(handleFormSubmit)}>
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <FormField
@@ -318,11 +343,21 @@ export function CheckForm({ onSubmit, initialData, bankAccounts, payees, categor
                 </CardContent>
                 <CardFooter className="flex justify-end gap-2">
                     <Button type="button" variant="outline" onClick={onCancel}>لغو</Button>
-                    <Button type="submit">ذخیره</Button>
+                    <Button type="submit">{initialData ? 'ذخیره تغییرات' : 'ثبت و امضا'}</Button>
                 </CardFooter>
             </form>
             </Form>
         </Card>
+
+        {/* Signature Dialog Component */}
+        <SignatureDialog 
+            open={isSignatureDialogOpen}
+            onOpenChange={setIsSignatureDialogOpen}
+            onConfirm={handleSignatureConfirm}
+            title={`امضای ${ownerName || 'صاحب حساب'}`}
+            description="لطفا صاحب حساب انتخاب شده، امضای خود را در کادر زیر رسم کند."
+        />
+
         {isAddPayeeOpen && (
             <AddPayeeDialog
                 isOpen={isAddPayeeOpen}

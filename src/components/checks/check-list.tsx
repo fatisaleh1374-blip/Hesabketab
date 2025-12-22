@@ -27,7 +27,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { USER_DETAILS } from '@/lib/constants';
 import Link from 'next/link';
-import { SignatureAli, SignatureFatemeh, HesabKetabLogo } from '../icons';
+import { HesabKetabLogo } from '../icons';
+import Image from 'next/image'; // Using next/image for optimized image loading
 
 interface CheckListProps {
   checks: Check[];
@@ -55,7 +56,7 @@ const CheckCard = ({ check, bankAccounts, payees, categories, onClear, onDelete,
         const category = categories.find(c => c.id === item.categoryId)?.name || 'نامشخص';
         const bankAccount = bankAccounts.find(b => b.id === item.bankAccountId);
         const ownerId = bankAccount?.ownerId;
-        const ownerName = ownerId === 'shared_account' ? 'علی کاکایی و فاطمه صالح' : (ownerId && USER_DETAILS[ownerId as 'ali' | 'fatemeh'] ? `${USER_DETAILS[ownerId as 'ali' | 'fatemeh'].firstName} ${USER_DETAILS[ownerId as 'ali' | 'fatemeh'].lastName}` : 'ناشناس');
+        const ownerName = ownerId === 'shared_account' ? 'علی و فاطمه' : (ownerId && USER_DETAILS[ownerId as 'ali' | 'fatemeh'] ? `${USER_DETAILS[ownerId as 'ali' | 'fatemeh'].firstName} ${USER_DETAILS[ownerId as 'ali' | 'fatemeh'].lastName}` : 'ناشناس');
         const expenseForName = item.expenseFor && USER_DETAILS[item.expenseFor] ? USER_DETAILS[item.expenseFor].firstName : 'مشترک';
         return { payee, category, bankAccount, ownerId, ownerName, expenseForName };
     }
@@ -186,17 +187,18 @@ const CheckCard = ({ check, bankAccounts, payees, categories, onClear, onDelete,
                             </div>
                              <div className="text-right relative">
                                 <span className="text-xs text-muted-foreground font-body">صاحب حساب:</span>
-                                <p className="font-body text-sm font-semibold">{ownerName}</p>
-                                <div className="absolute -bottom-5 -right-2 w-24 h-12 pointer-events-none opacity-80">
-                                    {ownerId === 'ali' && <SignatureAli className="w-full h-full text-gray-700 dark:text-gray-300" />}
-                                    {ownerId === 'fatemeh' && <SignatureFatemeh className="w-full h-full text-gray-700 dark:text-gray-300" />}
-                                    {ownerId === 'shared_account' && (
-                                        <>
-                                            <SignatureAli className="w-20 h-10 absolute -top-2 right-4 text-gray-700 dark:text-gray-300" />
-                                            <SignatureFatemeh className="w-20 h-10 absolute -top-2 left-[-20px] text-gray-700 dark:text-gray-300" />
-                                        </>
-                                    )}
-                                </div>
+                                <p className="font-body text-sm font-semibold h-6">{ownerName}</p>
+                                {check.signatureUrl && (
+                                    <div className="absolute -bottom-5 right-0 w-28 h-14 pointer-events-none">
+                                        <Image 
+                                            src={check.signatureUrl} 
+                                            alt={`امضای ${ownerName}`} 
+                                            width={112} 
+                                            height={56}
+                                            style={{ objectFit: 'contain'}} // Ensures the signature fits well
+                                        />
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
