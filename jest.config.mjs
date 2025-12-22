@@ -17,7 +17,7 @@ const config = {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
   transformIgnorePatterns: [
-    "node_modules/(?!(recharts)/)"
+    "node_modules/(?!(recharts|lucide-react))/"
   ],
 }
  
