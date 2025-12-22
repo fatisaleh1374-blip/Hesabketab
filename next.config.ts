@@ -42,6 +42,7 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  transpilePackages: ['recharts', 'lucide-react'],
 };
 
 export default withPWA(nextConfig);

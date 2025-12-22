@@ -16,9 +16,6 @@ const config = {
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
-  transformIgnorePatterns: [
-    "node_modules/(?!(recharts|lucide-react))/"
-  ],
 }
  
 // createJestConfig is exported this way to ensure that next/jest can load the Next.js config which is async
