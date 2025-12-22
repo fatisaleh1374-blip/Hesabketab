@@ -1,15 +1,11 @@
 
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getStorage } from 'firebase-admin/storage';
-import { initializeFirebaseAdmin } from '@/lib/firebase-admin'; // Updated import
+import { initializeFirebaseAdmin } from '@/lib/firebase-admin';
 import { v4 as uuidv4 } from 'uuid';
 
-export const config = {
-  api: {
-    // It's crucial to set bodyParser to false when dealing with raw data streams or buffers.
-    bodyParser: false,
-  },
-};
+// Note: We are NOT disabling bodyParser anymore. 
+// Next.js can handle JSON body parsing automatically.
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -18,21 +14,16 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   }
 
   try {
+    // The request body is already parsed by Next.js
+    const { signature, checkId } = req.body;
+
+    if (!signature || !checkId) {
+      return res.status(400).json({ message: 'Signature data and checkId are required.' });
+    }
+
     // Ensure Firebase Admin is initialized before using any admin services.
     initializeFirebaseAdmin();
     const bucket = getStorage().bucket();
-
-    // Manually parse the request body from buffer chunks.
-    const chunks: Buffer[] = [];
-    for await (const chunk of req) {
-        chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
-    }
-    const body = Buffer.concat(chunks).toString('utf8');
-    const { signature, checkId } = JSON.parse(body);
-
-    if (!signature || !checkId) {
-        return res.status(400).json({ message: 'Signature data and checkId are required.' });
-    }
 
     // Convert the data URI to a Buffer.
     const base64Data = signature.replace(/^data:image\/png;base64,/, "");
@@ -46,7 +37,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       metadata: {
         contentType: 'image/png',
       },
-      public: true, // This is crucial for getting a public URL
+      public: true,
     });
 
     const publicUrl = file.publicUrl();
@@ -58,9 +49,10 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     console.error('Error uploading signature:', error);
 
     let message = 'خطای سرور در آپلود امضا.';
-    // Provide a more specific error message if it's a permission issue.
-    if (error.code === 403) {
-        message = 'خطای دسترسی (403): سرویس‌اکانت برنامه اجازه نوشتن در Storage را ندارد. لطفا از کنسول Google Cloud، نقش Storage Object Admin را به آن اضافه کنید.';
+    if (error.code === 'storage/unauthorized' || error.code === 403) {
+      message = 'خطای دسترسی (403): اعتبارنامه سرویس شما اجازه آپلود در Storage را ندارد.';
+    } else if (error instanceof SyntaxError) {
+      message = 'خطای解析 (Parsing Error): فرمت درخواست ارسالی صحیح نیست.';
     }
 
     return res.status(500).json({ message: message, error: error.message });
