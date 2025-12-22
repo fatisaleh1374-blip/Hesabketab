@@ -7,7 +7,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useRouter } from 'next/navigation';
 import {
-  createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   User,
 } from 'firebase/auth';
@@ -38,7 +37,6 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { FirestorePermissionError } from '@/firebase/errors';
 import type { UserProfile } from '@/lib/types';
-
 
 const formSchema = z.object({
   email: z
@@ -76,40 +74,37 @@ export default function LoginPage() {
     }
   }, [currentUser, isUserLoading, router]);
 
-  // Helper function to create user profile if it doesn't exist
   const ensureUserProfile = async (user: User) => {
     if (!firestore) return;
     const userProfileRef = doc(firestore, 'users', user.uid);
     const userProfileSnap = await getDoc(userProfileRef);
 
     if (!userProfileSnap.exists()) {
-        const userDetailKey = user.email!.split('@')[0] as 'ali' | 'fatemeh';
-        const userDetail = USER_DETAILS[userDetailKey];
-        if (userDetail) {
-             const profileData: UserProfile = {
-              id: user.uid,
-              email: user.email!,
-              firstName: userDetail.firstName,
-              lastName: userDetail.lastName,
-            };
-            await setDoc(userProfileRef, profileData).catch((serverError) => {
-                throw new FirestorePermissionError({
-                  path: userProfileRef.path,
-                  operation: 'create',
-                  requestResourceData: profileData,
-                });
-            });
-        }
+      const userDetailKey = user.email!.split('@')[0] as 'ali' | 'fatemeh';
+      const userDetail = USER_DETAILS[userDetailKey];
+      if (userDetail) {
+        const profileData: UserProfile = {
+          id: user.uid,
+          email: user.email!,
+          firstName: userDetail.firstName,
+          lastName: userDetail.lastName,
+        };
+        await setDoc(userProfileRef, profileData).catch((serverError) => {
+          throw new FirestorePermissionError({
+            path: userProfileRef.path,
+            operation: 'create',
+            requestResourceData: profileData,
+          });
+        });
+      }
     }
   };
-
 
   async function onSubmit(values: LoginFormValues) {
     setIsLoading(true);
     const { email, password } = values;
 
     try {
-      // Try to sign in first
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
       
@@ -118,42 +113,16 @@ export default function LoginPage() {
         description: 'شما با موفقیت وارد شدید.',
       });
 
-      // Ensure profile exists, then redirect
       await ensureUserProfile(user);
       router.push('/');
 
     } catch (error: any) {
-      if (error.code === 'auth/user-not-found') {
-        // If user does not exist in Auth, create them
-        try {
-          const newUserCredential = await createUserWithEmailAndPassword(auth, email, password);
-          const newUser = newUserCredential.user;
-          
-          toast({
-            title: 'حساب کاربری ایجاد شد',
-            description: 'حساب شما با موفقیت ایجاد و وارد شدید.',
-          });
-          
-          // Create profile for the new user
-          await ensureUserProfile(newUser);
-          router.push('/');
-
-        } catch (creationError: any) {
-           toast({
-            variant: 'destructive',
-            title: 'خطا در ایجاد حساب',
-            description:
-              creationError.message || 'مشکلی در ساخت حساب جدید پیش آمد.',
-          });
-        }
-      } else {
-        // Handle other sign-in errors like wrong password
-        toast({
-          variant: 'destructive',
-          title: 'خطا در ورود',
-          description: 'ایمیل یا رمز عبور اشتباه است.',
-        });
-      }
+      // Handle all sign-in errors (wrong-password, user-not-found, etc.) with a generic message.
+      toast({
+        variant: 'destructive',
+        title: 'خطا در ورود',
+        description: 'ایمیل یا رمز عبور اشتباه است.',
+      });
     } finally {
       setIsLoading(false);
     }

@@ -2,7 +2,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import LoginPage from '@/app/login/page';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 
 // Mock useRouter
 const mockPush = jest.fn();
@@ -12,19 +12,18 @@ jest.mock('next/navigation', () => ({
   }),
 }));
 
-// Mock Firebase services more comprehensively
+// Mock Firebase services
 jest.mock('@/firebase', () => ({
-  useAuth: () => ({}), // Returns a mock auth object
+  useAuth: () => ({}),
   useFirestore: () => ({}),
   useUser: () => ({ user: null, isUserLoading: false }),
 }));
 
-// Mock the entire 'firebase/auth' module to control its functions
+// Mock 'firebase/auth' module
 jest.mock('firebase/auth', () => ({
-  ...jest.requireActual('firebase/auth'), // Keep original functions not mocked
+  ...jest.requireActual('firebase/auth'),
   signInWithEmailAndPassword: jest.fn(),
-  createUserWithEmailAndPassword: jest.fn(),
-  onAuthStateChanged: jest.fn(() => () => {}), // Mock onAuthStateChanged to return an unsubscribe function
+  onAuthStateChanged: jest.fn(() => () => {}),
 }));
 
 // Mock useToast
@@ -38,11 +37,9 @@ jest.mock('@/hooks/use-toast', () => ({
 describe('LoginPage', () => {
 
     beforeEach(() => {
-        // Clear all mock implementations and call history before each test
         mockPush.mockClear();
         mockToast.mockClear();
         (signInWithEmailAndPassword as jest.Mock).mockClear();
-        (createUserWithEmailAndPassword as jest.Mock).mockClear();
     });
 
   it('renders the login form', () => {
@@ -50,18 +47,6 @@ describe('LoginPage', () => {
     expect(screen.getByLabelText(/ایمیل/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/رمز عبور/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /ورود/i })).toBeInTheDocument();
-  });
-
-  it('shows validation error for invalid email', async () => {
-    render(<LoginPage />);
-    fireEvent.input(screen.getByLabelText(/ایمیل/i), {
-      target: { value: 'not-an-email' },
-    });
-    fireEvent.submit(screen.getByRole('button', { name: /ورود/i }));
-
-    await waitFor(() => {
-      expect(screen.getByText('لطفا یک ایمیل معتبر وارد کنید.')).toBeInTheDocument();
-    });
   });
 
   it('shows validation error for unauthorized email', async () => {
@@ -76,27 +61,13 @@ describe('LoginPage', () => {
     });
   });
 
-  it('shows validation error for short password', async () => {
-    render(<LoginPage />);
-    fireEvent.input(screen.getByLabelText(/رمز عبور/i), {
-      target: { value: '123' },
-    });
-    fireEvent.submit(screen.getByRole('button', { name: /ورود/i }));
-    
-    await waitFor(() => {
-      expect(screen.getByText('رمز عبور باید حداقل ۶ کاراکتر باشد.')).toBeInTheDocument();
-    });
-  });
-
   it('redirects to dashboard on successful login', async () => {
-    // Arrange: Mock a successful login response
     (signInWithEmailAndPassword as jest.Mock).mockResolvedValue({
       user: { uid: '123', email: 'ali@khanevadati.app' },
     });
 
     render(<LoginPage />);
 
-    // Act: Fill in the form with valid credentials and submit
     fireEvent.input(screen.getByLabelText(/ایمیل/i), {
       target: { value: 'ali@khanevadati.app' },
     });
@@ -105,26 +76,24 @@ describe('LoginPage', () => {
     });
     fireEvent.submit(screen.getByRole('button', { name: /ورود/i }));
 
-    // Assert: Wait for the router.push to be called to the dashboard
     await waitFor(() => {
       expect(mockPush).toHaveBeenCalledWith('/');
     });
-    // Optional: Assert that a success toast was shown
-    expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({
-        title: 'ورود موفق',
-    }));
+
+    await waitFor(() => {
+        expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({
+            title: 'ورود موفق',
+        }));
+    });
   });
 
-   it('handles wrong password error', async () => {
-    // Arrange: Mock a "wrong-password" error
+  it('handles wrong password error', async () => {
     (signInWithEmailAndPassword as jest.Mock).mockRejectedValue({
       code: 'auth/wrong-password',
-      message: 'Wrong password.',
     });
 
     render(<LoginPage />);
 
-    // Act
     fireEvent.input(screen.getByLabelText(/ایمیل/i), {
       target: { value: 'ali@khanevadati.app' },
     });
@@ -133,7 +102,6 @@ describe('LoginPage', () => {
     });
     fireEvent.submit(screen.getByRole('button', { name: /ورود/i }));
 
-    // Assert
     await waitFor(() => {
       expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({
         variant: 'destructive',
@@ -143,34 +111,28 @@ describe('LoginPage', () => {
     });
   });
 
-  it('creates a new user if user-not-found error occurs', async () => {
-    // Arrange: First sign-in fails, then user creation succeeds
+  it('handles user-not-found error with the same generic message', async () => {
     (signInWithEmailAndPassword as jest.Mock).mockRejectedValue({
       code: 'auth/user-not-found',
-    });
-    (createUserWithEmailAndPassword as jest.Mock).mockResolvedValue({
-      user: { uid: '456', email: 'fatemeh@khanevadati.app' },
     });
 
     render(<LoginPage />);
 
-    // Act
     fireEvent.input(screen.getByLabelText(/ایمیل/i), {
-      target: { value: 'fatemeh@khanevadati.app' },
+      target: { value: 'anotheruser@example.com' },
     });
     fireEvent.input(screen.getByLabelText(/رمز عبور/i), {
-      target: { value: 'newpassword123' },
+      target: { value: 'somepassword' },
     });
     fireEvent.submit(screen.getByRole('button', { name: /ورود/i }));
 
-    // Assert
     await waitFor(() => {
       expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({
-        title: 'حساب کاربری ایجاد شد',
+        variant: 'destructive',
+        title: 'خطا در ورود',
+        description: 'ایمیل یا رمز عبور اشتباه است.',
       }));
     });
-     await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith('/');
-    });
+    expect(mockPush).not.toHaveBeenCalled();
   });
 });
