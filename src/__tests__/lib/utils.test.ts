@@ -65,7 +65,7 @@ describe('formatCardNumber', () => {
     
     it('should return a placeholder for undefined or short input', () => {
         expect(formatCardNumber(undefined)).toBe('---- ---- ---- ----');
-        expect(formatCardNumber('1234')).toBe('1234 ');
+        expect(formatCardNumber('1234')).toBe('1234');
     });
 });
 

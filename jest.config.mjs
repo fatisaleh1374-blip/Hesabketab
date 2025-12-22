@@ -1,3 +1,4 @@
+
 import nextJest from 'next/jest.js'
  
 const createJestConfig = nextJest({
@@ -12,6 +13,12 @@ const config = {
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
   testEnvironment: 'jest-environment-jsdom',
   preset: 'ts-jest',
+  moduleNameMapper: {
+    '^@/(.*)$': '<rootDir>/src/$1',
+  },
+  transformIgnorePatterns: [
+    "node_modules/(?!(recharts)/)"
+  ],
 }
  
 // createJestConfig is exported this way to ensure that next/jest can load the Next.js config which is async
