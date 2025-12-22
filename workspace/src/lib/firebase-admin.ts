@@ -26,7 +26,7 @@ export function initializeFirebaseAdmin() {
 
       admin.initializeApp({
         credential: admin.credential.cert(serviceAccount),
-        // Add your storage bucket URL if it's not automatically detected
+        // Explicitly set the storage bucket URL. This is crucial for Storage operations.
         storageBucket: `${serviceAccount.project_id}.appspot.com`
       });
       console.log("Firebase Admin initialized with service account from environment variable.");
