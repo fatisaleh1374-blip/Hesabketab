@@ -1,8 +1,9 @@
-// This file is intentionally left blank. 
-// The correct Firebase initialization and provider logic is handled 
-// in client-provider.tsx and provider.tsx.
-// This file is now redundant and its old content was causing initialization issues.
-// Exporting the necessary hooks and components from their new locations.
+
+'use client';
+
+// This file acts as a central barrel file for exporting Firebase-related hooks and components.
+// It ensures that other parts of the application can import from a single, consistent path (`@/firebase`).
+// This file should NOT contain any initialization logic itself.
 
 export * from './provider';
 export * from './client-provider';
