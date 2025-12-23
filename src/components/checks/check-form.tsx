@@ -43,6 +43,7 @@ const formSchema = z.object({
   description: z.string().optional(),
   sayadId: z.string().min(1, { message: 'شماره صیادی الزامی است.' }),
   checkSerialNumber: z.string().min(1, { message: 'شماره سری چک الزامی است.' }),
+  signatureDataUrl: z.string().optional(), // Keep it here for form state
 }).refine(data => data.dueDate >= data.issueDate, {
     message: "تاریخ سررسید نمی‌تواند قبل از تاریخ صدور باشد.",
     path: ["dueDate"],
@@ -52,7 +53,7 @@ const formSchema = z.object({
 type CheckFormValues = z.infer<typeof formSchema>;
 
 interface CheckFormProps {
-  onSubmit: (data: any) => void;
+  onSubmit: (data: CheckFormValues) => void;
   initialData: Check | null;
   bankAccounts: BankAccount[];
   payees: Payee[];
@@ -65,10 +66,6 @@ export function CheckForm({ onSubmit, initialData, bankAccounts, payees, categor
   const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
   const [isSignatureDialogOpen, setIsSignatureDialogOpen] = useState(false);
   
-  // This state will hold the form data while the signature dialog is open
-  const [pendingFormData, setPendingFormData] = useState<CheckFormValues | null>(null);
-
-
   const form = useForm<CheckFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -82,6 +79,7 @@ export function CheckForm({ onSubmit, initialData, bankAccounts, payees, categor
       description: '',
       sayadId: '',
       checkSerialNumber: '',
+      signatureDataUrl: '',
     },
   });
 
@@ -94,6 +92,7 @@ export function CheckForm({ onSubmit, initialData, bankAccounts, payees, categor
         description: initialData.description || '',
         sayadId: initialData.sayadId || '',
         checkSerialNumber: initialData.checkSerialNumber || '',
+        signatureDataUrl: initialData.signatureDataUrl || '',
       });
     } else {
       form.reset({
@@ -107,6 +106,7 @@ export function CheckForm({ onSubmit, initialData, bankAccounts, payees, categor
           description: '',
           sayadId: '',
           checkSerialNumber: '',
+          signatureDataUrl: '',
       });
     }
   }, [initialData, form]);
@@ -128,21 +128,19 @@ export function CheckForm({ onSubmit, initialData, bankAccounts, payees, categor
   };
 
   const handleFormSubmit = (data: CheckFormValues) => {
-    if (initialData) {
-        onSubmit(data);
-    } else {
-        setPendingFormData(data);
-        setIsSignatureDialogOpen(true);
-    }
+      // Always open signature dialog on submit, passing current form data
+      setIsSignatureDialogOpen(true);
   };
-
+  
   const handleSignatureConfirm = (signature: string) => {
-    if (pendingFormData) {
-        const finalData = { ...pendingFormData, signatureDataUrl: signature };
-        onSubmit(finalData);
-    }
+    // Get the latest form data
+    const currentFormData = form.getValues();
+    // Add the new signature
+    const finalData = { ...currentFormData, signatureDataUrl: signature };
+    // Submit everything
+    onSubmit(finalData);
+
     setIsSignatureDialogOpen(false);
-    setPendingFormData(null);
   };
 
   const getOwnerName = (account: BankAccount) => {
@@ -154,7 +152,7 @@ export function CheckForm({ onSubmit, initialData, bankAccounts, payees, categor
   const checkingAccounts = [...bankAccounts.filter(acc => acc.accountType === 'checking')].sort((a, b) => b.balance - a.balance);
   const selectedBankAccountId = form.watch('bankAccountId');
   const selectedBankAccount = bankAccounts.find(acc => acc.id === selectedBankAccountId);
-  const ownerName = selectedBankAccount?.ownerId ? USER_DETAILS[selectedBankAccount.ownerId as keyof typeof USER_DETAILS]?.firstName : null;
+  const ownerName = selectedBankAccount?.ownerId ? (USER_DETAILS[selectedBankAccount.ownerId as keyof typeof USER_DETAILS]?.firstName || 'صاحب حساب') : 'صاحب حساب';
 
   return (
       <>
@@ -344,7 +342,7 @@ export function CheckForm({ onSubmit, initialData, bankAccounts, payees, categor
                 </CardContent>
                 <CardFooter className="flex justify-end gap-2">
                     <Button type="button" variant="outline" onClick={onCancel}>لغو</Button>
-                    <Button type="submit">{initialData ? 'ذخیره تغییرات' : 'ثبت و امضا'}</Button>
+                    <Button type="submit">{initialData ? 'ویرایش و امضای مجدد' : 'ثبت و امضا'}</Button>
                 </CardFooter>
             </form>
             </Form>
@@ -355,7 +353,7 @@ export function CheckForm({ onSubmit, initialData, bankAccounts, payees, categor
             open={isSignatureDialogOpen}
             onOpenChange={setIsSignatureDialogOpen}
             onConfirm={handleSignatureConfirm}
-            title={`امضای ${ownerName || 'صاحب حساب'}`}
+            title={`امضای ${ownerName}`}
             description="لطفا صاحب حساب انتخاب شده، امضای خود را در کادر زیر رسم کند."
         />
 

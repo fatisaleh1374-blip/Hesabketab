@@ -1,11 +1,11 @@
 
 'use client';
 
-import React from 'react';
+import React, { useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { PlusCircle, ArrowRight, Plus } from 'lucide-react';
 import { useUser, useFirestore } from '@/firebase';
-import { collection, doc, runTransaction, query, where, getDocs, addDoc, updateDoc, serverTimestamp, writeBatch, deleteDoc, setDoc } from 'firebase/firestore';
+import { collection, doc, runTransaction, query, where, getDocs, updateDoc, serverTimestamp, setDoc, deleteDoc } from 'firebase/firestore';
 import { CheckList } from '@/components/checks/check-list';
 import { CheckForm } from '@/components/checks/check-form';
 import type { Check, BankAccount, Payee, Category, Expense, TransactionDetails, UserProfile } from '@/lib/types';
@@ -35,7 +35,7 @@ export default function ChecksPage() {
   
   const { checks, bankAccounts, payees, categories, users } = allData;
 
-  const handleFormSubmit = React.useCallback(async (values: CheckFormData) => {
+  const handleFormSubmit = useCallback(async (values: CheckFormData) => {
     if (!user || !firestore || !users || !bankAccounts || !payees || !categories) return;
 
     setIsSubmitting(true);
@@ -49,24 +49,35 @@ export default function ChecksPage() {
     }
 
     if (editingCheck) {
+      // --- EDIT LOGIC ---
       const checkRef = doc(checksColRef, editingCheck.id);
-      const { signatureDataUrl, ...updatedValues } = values; // signature is not editable
+      const { signatureDataUrl, ...updatedValues } = values;
+
+      if (!signatureDataUrl) {
+          toast({ variant: 'destructive', title: "خطا", description: "امضا برای ویرایش چک الزامی است." });
+          setIsSubmitting(false);
+          return;
+      }
+      
       const updatedCheck = {
         ...updatedValues,
         issueDate: (values.issueDate as any).toISOString ? (values.issueDate as any).toISOString() : values.issueDate,
         dueDate: (values.dueDate as any).toISOString ? (values.dueDate as any).toISOString() : values.dueDate,
         ownerId: bankAccount.ownerId,
-        registeredByUserId: editingCheck.registeredByUserId,
+        registeredByUserId: editingCheck.registeredByUserId, // Preserve original registrar
+        signatureDataUrl: signatureDataUrl, // Always update with the new signature
       };
+      
       try {
         await updateDoc(checkRef, updatedCheck);
-        toast({ title: "موفقیت", description: "چک با موفقیت ویرایش شد." });
+        toast({ title: "موفقیت", description: "چک با موفقیت ویرایش و امضای آن به‌روزرسانی شد." });
       } catch (serverError) {
         const permissionError = new FirestorePermissionError({ path: checkRef.path, operation: 'update', requestResourceData: updatedCheck });
         errorEmitter.emit('permission-error', permissionError);
       }
+
     } else {
-        // Create new check with signature data
+        // --- CREATE LOGIC ---
         const { signatureDataUrl, ...newCheckValues } = values;
         if (!signatureDataUrl) {
           toast({ variant: 'destructive', title: "خطا", description: "امضا برای ثبت چک الزامی است." });
