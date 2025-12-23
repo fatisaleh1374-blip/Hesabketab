@@ -1,11 +1,7 @@
-
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getStorage } from 'firebase-admin/storage';
 import { initializeFirebaseAdmin } from '@/lib/firebase-admin';
-import { v4 as uuidv4 } from 'uuid';
-
-// Note: We are NOT disabling bodyParser anymore. 
-// Next.js can handle JSON body parsing automatically.
+import { randomUUID } from 'crypto';
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -14,7 +10,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   }
 
   try {
-    // The request body is already parsed by Next.js
+    // The request body is already parsed by Next.js if the content-type is correct
     const { signature, checkId } = req.body;
 
     if (!signature || !checkId) {
@@ -29,7 +25,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     const base64Data = signature.replace(/^data:image\/png;base64,/, "");
     const buffer = Buffer.from(base64Data, 'base64');
 
-    const fileName = `signatures/${checkId}/${uuidv4()}.png`;
+    const fileName = `signatures/${checkId}/${randomUUID()}.png`;
     const file = bucket.file(fileName);
 
     // Save the file to the bucket and make it public.
