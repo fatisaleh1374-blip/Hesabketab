@@ -137,7 +137,7 @@ export function CheckForm({ onSubmit, initialData, bankAccounts, payees, categor
 
   const handleSignatureConfirm = (signature: string) => {
     if (formData) {
-        const finalData = { ...formData, signature };
+        const finalData = { ...formData, signatureDataUrl: signature };
         onSubmit(finalData);
     }
     setIsSignatureDialogOpen(false);

@@ -5,7 +5,7 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { PlusCircle, ArrowRight, Plus } from 'lucide-react';
 import { useUser, useFirestore } from '@/firebase';
-import { collection, doc, runTransaction, query, where, getDocs, addDoc, updateDoc, serverTimestamp, writeBatch, deleteDoc } from 'firebase/firestore';
+import { collection, doc, runTransaction, query, where, getDocs, addDoc, updateDoc, serverTimestamp, writeBatch, deleteDoc, setDoc } from 'firebase/firestore';
 import { CheckList } from '@/components/checks/check-list';
 import { CheckForm } from '@/components/checks/check-form';
 import type { Check, BankAccount, Payee, Category, Expense, TransactionDetails, UserProfile } from '@/lib/types';
@@ -108,7 +108,60 @@ export default function ChecksPage() {
   }, [user, firestore, editingCheck, toast, bankAccounts, payees, categories, users]);
   
     const handleClearCheck = React.useCallback(async (check: Check) => {
-    // ... (This function remains correct)
+    if (!user || !firestore || !bankAccounts || !payees || !categories || !users) return;
+
+    setIsSubmitting(true);
+    const familyDataRef = doc(firestore, 'family-data', FAMILY_DATA_DOC);
+    const checkRef = doc(familyDataRef, 'checks', check.id);
+    const bankAccountRef = doc(familyDataRef, 'bankAccounts', check.bankAccountId);
+
+    try {
+        await runTransaction(firestore, async (transaction) => {
+            const bankAccountDoc = await transaction.get(bankAccountRef);
+            if (!bankAccountDoc.exists()) throw new Error("حساب بانکی یافت نشد.");
+
+            const bankAccountData = bankAccountDoc.data()!;
+            const availableBalance = bankAccountData.balance - (bankAccountData.blockedBalance || 0);
+
+            if (availableBalance < check.amount) {
+                throw new Error("موجودی قابل استفاده حساب برای پاس کردن چک کافی نیست.");
+            }
+            
+            const clearedDate = new Date().toISOString();
+            const balanceBefore = bankAccountData.balance;
+            const balanceAfter = balanceBefore - check.amount;
+
+            transaction.update(checkRef, { status: 'cleared', clearedDate });
+            transaction.update(bankAccountRef, { balance: balanceAfter });
+            
+            const expenseRef = doc(collection(familyDataRef, 'expenses'));
+            const payeeName = payees.find(p => p.id === check.payeeId)?.name || 'ناشناس';
+            const expenseDescription = `پاس کردن چک به: ${payeeName}`;
+
+            transaction.set(expenseRef, {
+                id: expenseRef.id,
+                ownerId: bankAccountData.ownerId,
+                registeredByUserId: user.uid,
+                amount: check.amount,
+                bankAccountId: check.bankAccountId,
+                categoryId: check.categoryId,
+                payeeId: check.payeeId,
+                date: clearedDate,
+                description: expenseDescription,
+                type: 'expense' as const,
+                checkId: check.id,
+                expenseFor: check.expenseFor,
+                createdAt: serverTimestamp(),
+                balanceBefore,
+                balanceAfter,
+            });
+        });
+        toast({ title: "موفقیت", description: "چک با موفقیت پاس شد." });
+    } catch (error: any) {
+        toast({ variant: 'destructive', title: 'خطا در پاس کردن چک', description: error.message || "مشکلی در عملیات پیش آمد." });
+    } finally {
+        setIsSubmitting(false);
+    }
   }, [user, firestore, bankAccounts, payees, categories, users, toast]);
   
   const handleDeleteCheck = React.useCallback(async (check: Check) => {
@@ -119,8 +172,6 @@ export default function ChecksPage() {
     let associatedExpense: Expense | null = null;
     let expenseRef: any = null;
 
-    // --- REFACTORED LOGIC ---
-    // 1. Perform reads *before* the transaction
     if (check.status === 'cleared') {
         try {
             const expenseQuery = query(collection(familyDataRef, 'expenses'), where('checkId', '==', check.id));
@@ -136,21 +187,16 @@ export default function ChecksPage() {
     }
 
     try {
-        // 2. Run the transaction with all necessary data prepared
         await runTransaction(firestore, async (transaction) => {
-            // Delete the check itself
             transaction.delete(checkRef);
-
-            // If an associated expense was found, handle the financial reversal
             if (associatedExpense && expenseRef) {
                 const accountRef = doc(familyDataRef, 'bankAccounts', associatedExpense.bankAccountId);
-                const accountDoc = await transaction.get(accountRef); // Read inside transaction
+                const accountDoc = await transaction.get(accountRef); 
                 
                 if (accountDoc.exists()) {
                     const accountData = accountDoc.data() as BankAccount;
                     transaction.update(accountRef, { balance: accountData.balance + associatedExpense.amount });
                 }
-                // Delete the associated expense record
                 transaction.delete(expenseRef);
             }
         });
@@ -163,8 +209,6 @@ export default function ChecksPage() {
         errorEmitter.emit('permission-error', permissionError);
     }
 }, [user, firestore, toast]);
-
-  // ... (rest of the component remains the same)
 
   const handleAddNew = React.useCallback(() => {
     setEditingCheck(null);
