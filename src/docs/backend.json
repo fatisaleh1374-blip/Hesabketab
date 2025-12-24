@@ -498,6 +498,97 @@
           "concept": "Currently, signature images are stored as long Base64 Data URI strings (`signatureDataUrl`) directly within the `Check` documents. This is inefficient for a database.",
           "translation": "The `signatureDataUrl` field should be replaced with a `signature_image_path` (TEXT) column in the `checks` table. On the client, after the user draws their signature, the Base64 string should be converted to a Blob/File object. This file should be uploaded to Supabase Storage. The returned file path is then stored in the `signature_image_path` column. To display the image, the UI would fetch the signed URL for that path from Supabase Storage and use it in the `<img>` tag's `src` attribute."
       }
-  }
+  },
+  "filesToMigrate": [
+    {
+      "path": "src/app/layout.tsx",
+      "description": "This is the root layout of the application. It contains the main Firebase context provider (`FirebaseClientProvider`) and handles the top-level authentication routing logic.",
+      "keyAreas": ["FirebaseClientProvider", "useUser", "useAuth", "handleSignOut"]
+    },
+    {
+      "path": "src/firebase/provider.tsx",
+      "description": "This file defines the core React Context for Firebase services and the main hooks (`useFirebase`, `useAuth`, `useFirestore`, `useUser`) used throughout the app. The entire file would be replaced with a Supabase equivalent.",
+      "keyAreas": ["FirebaseContext", "FirebaseProvider", "useFirebase", "useAuth", "useFirestore", "useUser"]
+    },
+    {
+      "path": "src/firebase/client-provider.tsx",
+      "description": "This component is responsible for client-side initialization of the Firebase SDK. This logic would be replaced with the initialization of the Supabase client SDK.",
+      "keyAreas": ["initializeFirebaseClient", "FirebaseClientProvider"]
+    },
+    {
+      "path": "src/firebase/config.ts",
+      "description": "Contains the Firebase project configuration object. This would be replaced with Supabase project URL and anon key.",
+      "keyAreas": ["firebaseConfig"]
+    },
+    {
+      "path": "src/firebase/firestore/use-collection.tsx",
+      "description": "A custom hook that provides a real-time subscription to a Firestore collection (`onSnapshot`). This needs to be replaced with a hook that uses Supabase's real-time subscription functionality.",
+      "keyAreas": ["useCollection", "onSnapshot"]
+    },
+    {
+      "path": "src/firebase/firestore/use-doc.tsx",
+      "description": "A custom hook for real-time subscription to a single Firestore document. This would be replaced by a Supabase equivalent for subscribing to a single row.",
+      "keyAreas": ["useDoc", "onSnapshot"]
+    },
+    {
+      "path": "src/hooks/use-dashboard-data.ts",
+      "description": "This is the most critical data-fetching hook in the app. It uses `useCollection` for every data type. All these calls must be replaced with Supabase data fetching methods.",
+      "keyAreas": ["useCollection", "collection", "doc"]
+    },
+    {
+      "path": "src/app/login/page.tsx",
+      "description": "Handles user login. The authentication logic needs to be migrated from Firebase Auth to Supabase Auth.",
+      "keyAreas": ["signInWithEmailAndPassword", "ensureUserProfile", "setDoc", "getDoc"]
+    },
+    {
+      "path": "src/app/transactions/page.tsx",
+      "description": "Manages expenses. The `handleFormSubmit` and `handleDelete` functions contain `runTransaction` calls to atomically update Firestore documents. This logic must be moved to a Supabase server-side function.",
+      "keyAreas": ["runTransaction", "doc", "collection", "updateDoc", "deleteDoc"]
+    },
+    {
+      "path": "src/app/income/page.tsx",
+      "description": "Manages incomes. Contains a `runTransaction` to atomically update the bank balance and create an income document.",
+      "keyAreas": ["runTransaction", "collection", "doc", "updateDoc", "deleteDoc"]
+    },
+    {
+      "path": "src/app/transfers/page.tsx",
+      "description": "Manages internal transfers between accounts. Uses `runTransaction` to atomically update two bank accounts and create a transfer log.",
+      "keyAreas": ["runTransaction", "collection", "doc", "updateDoc", "deleteDoc"]
+    },
+    {
+      "path": "src/app/checks/page.tsx",
+      "description": "Manages checks. Contains complex `runTransaction` logic for creating, clearing (which creates an expense), and deleting checks (which may reverse an expense).",
+      "keyAreas": ["runTransaction", "setDoc", "updateDoc", "deleteDoc", "getDocs", "collection", "query", "where"]
+    },
+    {
+      "path": "src/app/loans/page.tsx",
+      "description": "Manages loans. Contains `runTransaction` for creating loans (and potentially depositing funds) and paying installments (which creates an expense and payment log).",
+      "keyAreas": ["runTransaction", "doc", "collection", "updateDoc", "getDoc", "addDoc", "deleteDoc"]
+    },
+    {
+      "path": "src/app/debts/page.tsx",
+      "description": "Manages miscellaneous debts. Contains `runTransaction` logic for creating debts and paying them, which is similar to the loan payment workflow.",
+      "keyAreas": ["runTransaction", "doc", "collection", "updateDoc", "getDocs", "query", "where"]
+    },
+    {
+      "path": "src/app/goals/page.tsx",
+      "description": "Manages financial goals. Contains highly complex `runTransaction` logic for contributing to goals (blocking balance), achieving goals (unblocking balance and creating final expenses), and reverting/deleting goals.",
+      "keyAreas": ["runTransaction", "doc", "collection", "updateDoc", "getDocs", "query", "where"]
+    },
+    {
+      "path": "src/app/chat/page.tsx",
+      "description": "Handles the chat interface. The `ChatInterface` component within this page fetches messages and sends new ones using Firestore.",
+      "keyAreas": ["useCollection", "addDoc", "writeBatch", "collection", "query", "orderBy", "serverTimestamp"]
+    },
+    {
+      "path": "src/lib/notifications.ts",
+      "description": "This utility function sends system messages to the chat by creating a new document in the `chatMessages` collection in Firestore.",
+      "keyAreas": ["collection", "doc", "setDoc", "serverTimestamp"]
+    },
+    {
+      "path": "firestore.rules",
+      "description": "Contains the security rules for the Firestore database. This logic must be translated into Row-Level Security (RLS) policies for each table in Supabase/PostgreSQL.",
+      "keyAreas": ["match /family-data/shared-data/{document=**}", "allow read, write"]
+    }
+  ]
 }
-    
