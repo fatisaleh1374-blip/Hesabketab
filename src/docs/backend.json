@@ -1,4 +1,4 @@
-
+@backend.
 {
   "description": "Technical specification for migrating the Khanevadati app backend from Firebase/Firestore to Supabase/PostgreSQL. This is the complete and corrected version.",
   "firestore": {

@@ -5,6 +5,8 @@ import './globals.css';
 import React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { SupabaseAuthProvider, useSupabaseAuth } from '@/components/providers/supabase-auth-provider'; // <-- 1. Import new provider and hook
+import { supabase } from '@/lib/supabase-client'; // <-- Import supabase client for signout
 import {
   SidebarProvider,
   Sidebar,
@@ -40,21 +42,35 @@ import {
 } from 'lucide-react';
 import { HesabKetabLogo } from '@/components/icons';
 import { getPlaceholderImage } from '@/lib/placeholder-images';
-import { useUser, useAuth, FirebaseClientProvider } from '@/firebase';
-import { signOut } from 'firebase/auth';
 import { Skeleton } from '@/components/ui/skeleton';
 import { USER_DETAILS } from '@/lib/constants';
-import type { User } from 'firebase/auth';
 import { cn } from '@/lib/utils';
-import { useUnreadMessages } from '@/hooks/useUnreadMessages';
+// import { useUnreadMessages } from '@/hooks/useUnreadMessages'; // This will be migrated later
 import { Toaster } from "@/components/ui/toaster"
+import { User } from '@supabase/supabase-js'; // <-- Use Supabase User type
+
+// NOTE: This is a temporary hook until we migrate the user profile data fetching
+const useUserProfile = (user: User | null) => {
+  if (!user) return { userDetail: null, userName: 'کاربر', userAvatar: null };
+  
+  // This logic is based on the old Firebase structure and will be updated
+  const key = user.email?.startsWith('ali') ? 'ali' : 'fatemeh';
+  const userDetail = USER_DETAILS[key];
+  const userAvatar = getPlaceholderImage(`${key}-avatar`);
+  const userName = userDetail?.firstName || 'کاربر';
+
+  return { userDetail, userName, userAvatar };
+};
+
 
 const useSimpleTheme = () => {
   const [theme, setTheme] = React.useState('light');
 
   React.useEffect(() => {
-    const isDark = document.documentElement.classList.contains('dark');
-    setTheme(isDark ? 'dark' : 'light');
+    if (typeof window !== 'undefined') {
+      const isDark = document.documentElement.classList.contains('dark');
+      setTheme(isDark ? 'dark' : 'light');
+    }
   }, []);
 
   const toggleTheme = () => {
@@ -116,9 +132,7 @@ const MobileMenuContent = ({ user, theme, toggleTheme, handleSignOut, onLinkClic
   onLinkClick?: () => void;
   unreadCount: number;
 }) => {
-    const userDetail = user ? USER_DETAILS[user.email?.startsWith('ali') ? 'ali' : 'fatemeh'] : null;
-    const userAvatar = getPlaceholderImage(`${user?.email?.startsWith('ali') ? 'ali' : 'fatemeh'}-avatar`);
-    const userName = userDetail?.firstName || 'کاربر';
+    const { userName, userAvatar } = useUserProfile(user);
 
     return (
         <div className="flex h-full flex-col">
@@ -181,30 +195,25 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
   const pathname = usePathname();
   const router = useRouter();
   const { theme, toggleTheme } = useSimpleTheme();
-  const { user, isUserLoading } = useUser();
-  const auth = useAuth();
+  const { user, isLoading: isUserLoading } = useSupabaseAuth(); // <-- 2. Use the new Supabase hook
   const [isMobileMenuOpen, setMobileMenuOpen] = React.useState(false);
-  const { unreadCount } = useUnreadMessages();
+  const unreadCount = 0; // Temporary value, will be migrated
   
+  // 3. Re-implement sign out with Supabase
   const handleSignOut = async () => {
-    if (auth) {
-      await signOut(auth);
-    }
+    await supabase.auth.signOut();
     router.push('/login');
   };
 
+  // 4. Re-implement the route guard with the new hook
   React.useEffect(() => {
-    // Only perform redirection logic once the user's auth state is fully resolved.
     if (!isUserLoading && !user && pathname !== '/login') {
       router.replace('/login');
     }
   }, [isUserLoading, user, pathname, router]);
 
-  const userDetail = user ? USER_DETAILS[user.email?.startsWith('ali') ? 'ali' : 'fatemeh'] : null;
-  const userAvatar = getPlaceholderImage(`${user?.email?.startsWith('ali') ? 'ali' : 'fatemeh'}-avatar`);
-  const userName = userDetail?.firstName || 'کاربر';
+  const { userName, userAvatar } = useUserProfile(user);
   
-  // While loading, show a global loading indicator to prevent route guard issues.
   if (isUserLoading && pathname !== '/login') {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -216,7 +225,6 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
     );
   }
   
-  // If not loading and no user, show the login page content.
   if (pathname === '/login' || (!user && !isUserLoading)) {
     return <>{children}</>;
   }
@@ -336,13 +344,13 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
              {children}
           </main>
       </div>
-       {/* Floating Action Button for Chat */}
       <div className={cn(
         "fixed bottom-4 left-4 z-50",
         pathname === '/chat' && 'hidden' // Hide on chat page
       )}>
         <Button asChild size="icon" className="h-14 w-14 rounded-full shadow-lg relative">
             <Link href="/chat">
+              {/* This will be migrated later */}
               {unreadCount > 0 && (
                   <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-destructive border-2 border-background flex items-center justify-center text-xs font-bold text-white">
                       {unreadCount}
@@ -357,7 +365,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
   );
 }
 
-
+// 5. Replace the root component to use the new Supabase Provider
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fa" dir="rtl">
@@ -372,10 +380,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="description" content="اپلیکیشن مدرن و جامع برای مدیریت مالی شخصی و خانوادگی" />
       </head>
       <body>
-        <FirebaseClientProvider>
+        <SupabaseAuthProvider> {/* <-- The magic happens here */}
             <AppLayout>{children}</AppLayout>
             <Toaster />
-        </FirebaseClientProvider>
+        </SupabaseAuthProvider>
       </body>
     </html>
   );

@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -6,11 +5,6 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useRouter } from 'next/navigation';
-import {
-  signInWithEmailAndPassword,
-  User,
-} from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -31,12 +25,10 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { HesabKetabLogo } from '@/components/icons';
-import { useAuth, useFirestore, useUser } from '@/firebase';
-import { ALLOWED_USERS, USER_DETAILS } from '@/lib/constants';
+import { ALLOWED_USERS } from '@/lib/constants';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
-import { FirestorePermissionError } from '@/firebase/errors';
-import type { UserProfile } from '@/lib/types';
+import { supabase } from '@/lib/supabase-client'; // <-- 1. Import Supabase client
 
 const formSchema = z.object({
   email: z
@@ -54,11 +46,9 @@ type LoginFormValues = z.infer<typeof formSchema>;
 
 export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
-  const auth = useAuth();
-  const firestore = useFirestore();
+  const [isUserLoading, setIsUserLoading] = useState(true); // To check initial session
   const router = useRouter();
   const { toast } = useToast();
-  const { user: currentUser, isUserLoading } = useUser();
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(formSchema),
@@ -68,68 +58,63 @@ export default function LoginPage() {
     },
   });
 
+  // 2. Check for active session and redirect if user is already logged in
   useEffect(() => {
-    if (!isUserLoading && currentUser) {
-      router.push('/');
-    }
-  }, [currentUser, isUserLoading, router]);
-
-  const ensureUserProfile = async (user: User) => {
-    if (!firestore) return;
-    const userProfileRef = doc(firestore, 'users', user.uid);
-    const userProfileSnap = await getDoc(userProfileRef);
-
-    if (!userProfileSnap.exists()) {
-      const userDetailKey = user.email!.split('@')[0] as 'ali' | 'fatemeh';
-      const userDetail = USER_DETAILS[userDetailKey];
-      if (userDetail) {
-        const profileData: UserProfile = {
-          id: user.uid,
-          email: user.email!,
-          firstName: userDetail.firstName,
-          lastName: userDetail.lastName,
-        };
-        await setDoc(userProfileRef, profileData).catch((serverError) => {
-          throw new FirestorePermissionError({
-            path: userProfileRef.path,
-            operation: 'create',
-            requestResourceData: profileData,
-          });
-        });
+    const checkSession = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
+        router.push('/');
+      } else {
+        setIsUserLoading(false);
       }
-    }
-  };
+    };
+    checkSession();
 
+    // Listen for auth changes to handle redirects after login/logout from other tabs
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN') {
+        router.push('/');
+      }
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, [router]);
+
+
+  // 3. Rewritten onSubmit function for Supabase
   async function onSubmit(values: LoginFormValues) {
     setIsLoading(true);
     const { email, password } = values;
 
-    try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-      
-      toast({
-        title: 'ورود موفق',
-        description: 'شما با موفقیت وارد شدید.',
-      });
+    // Supabase sign-in logic
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
 
-      await ensureUserProfile(user);
-      router.push('/');
-
-    } catch (error: any) {
-      // Handle all sign-in errors (wrong-password, user-not-found, etc.) with a generic message.
+    if (error) {
       toast({
         variant: 'destructive',
         title: 'خطا در ورود',
-        description: 'ایمیل یا رمز عبور اشتباه است.',
+        description: 'ایمیل یا رمز عبور اشتباه است.', 
       });
-    } finally {
-      setIsLoading(false);
+    } else {
+      toast({
+        title: 'ورود موفق',
+        description: 'شما با موفقیت وارد شدید. در حال انتقال...',
+      });
+      // No need for ensureUserProfile, the trigger handles it!
+      // The onAuthStateChange listener will handle the redirect.
     }
+
+    setIsLoading(false);
   }
   
   const totalLoading = isLoading || isUserLoading;
 
+  // No changes needed for the JSX, it remains the same.
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
       <Card className="w-full max-w-sm">
